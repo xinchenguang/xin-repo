@@ -1,0 +1,319 @@
+import re
+
+convert = {}
+# G = [('S', 'AB'), ('S', 'bC'), ('A', 'ε'), ('A', 'b'), ('B', 'ε'), ('B', 'aD'), ('C', 'AD'), ('C', 'b'), ('D', 'aS'),('D', 'c')]
+# G = [('E','TE’'),('E’','+TE’|ε'),('T','FT’'),('T’','*FT’|ε'),('F','(E)|i')]
+G = [('E', ['T', 'E’']), ('E’', ['+', 'T', 'E’']), ('E’', ['ε']), ('T', ['F', 'T’']), ('T’', ['*', 'F', 'T’']),
+     ('T’', ['ε']), ('F', ['(', 'E', ')']), ('F', ['i'])]
+Vt = ['(', ')', '+', '-', '*', '/']
+pattern = re.compile('|'.join(map(re.escape, Vt)))
+Find = {}
+FRIST = {}
+FLOOW = {}
+SELECT = []
+G_2 = G[:]
+table = {}
+#树结构
+class Node:
+    def __init__(self):
+        self.name = []
+        self.parent = ''
+        self.children = []
+        self.reach = 0
+        self.parent_name = ''
+    def add_child(self, node):
+        self.children.append(node)
+    def remove_child(self, node):
+        self.children.remove(node)
+    def traverse_dfs(self):
+        print('节点',self.name,'父节点',self.parent_name)
+        for child in self.children:
+            child.traverse_dfs()
+def find_empty():
+    G_1 = list(G)
+
+    for g in G:
+        if g[0] not in Find:
+            Find[g[0]] = '未定'
+    print('初值:', Find)
+    for g in G:
+        # 如果产生式右部含有终结符，就删去
+        right = ''.join(g[1])
+        if re.search(r'[a-z]', right) or pattern.search(right):
+            G_1.remove(g)
+            # 如果这使得该非终结符为左部的产生式全部消失
+            lift = []
+            for g_1 in G_1:
+                lift.append(g_1[0])
+            if g[0] not in lift and Find[g[0]] == '未定':
+                Find[g[0]] = '否'
+        # 如果非终结符为左部的产生式的右部是’ε‘，则设置该非终结符为是，并删除其全部
+        elif re.search(r'[A-Z]', g[0]) and right == 'ε':
+            Find[g[0]] = '是'
+            G_1.remove(g)
+            G_1 = [item for item in G_1 if item[0] != g[0]]
+
+    print('第一次扫描:', Find)
+    print('剩余:', G_1)
+    while True:
+        if len(G_1) == 0:
+            break
+        for g_1 in G_1:
+            if Find[g_1[0]] != '未定':
+                G_1.remove(g_1)
+            else:
+                for char in g_1[1]:
+                    #print(char,g_1[1])
+                    if re.search(r'[A-Z]', char):
+                        if Find[char] == '是':
+                            y = g_1[1].index(char)
+                            g_2 = list(g_1[1])
+                            #g_1[1][y] = ''
+                            g_2[y] = ''
+                            #g_1 = (g_1[0],g_1[1])
+                            g_1 = (g_1[0],g_2)
+                            if all(item == '' for item in g_1[1]):
+                                Find[g_1[0]] = '是'
+                        elif Find[char] == '否':
+                            key = g_1[0]
+                            G_1.remove(g_1)
+                            # 如果这使得该非终结符为左部的产生式全部消失
+                            lift = []
+                            for g_1 in G_1:
+                                lift.append(g_1[0])
+                            if key not in lift and Find[key] == '未定':
+                                Find[key] = '否'
+                            break
+    print('第二次扫描:', Find)
+    # print('剩余:', G_2)
+
+print('文法G:',G)
+make = []
+
+
+def make_frist():
+    for f in Find:
+        FRIST[f] = ''
+        FLOOW[f] = ''
+        for g in G:
+            if g[0] == f:
+                make.append(g)
+        while len(make) > 0:
+            if make[0][1] == '':
+                make.remove(make[0])
+            #如果如果字符串以终结符开头或为空串
+            elif make[0][1][0] == 'ε' or re.search(r'[a-z]', make[0][1][0]) or pattern.search(make[0][1][0]):
+                FRIST[make[0][0]] = FRIST[make[0][0]] + make[0][1][0]
+                make.remove(make[0])
+            elif re.search(r'[A-Z]', make[0][1][0]) and Find[make[0][1][0]] == Find[make[0][0]]:
+                # print(make[0][1][0])
+                for g in G:
+                    if g[0] == make[0][1][0]:
+                        # print(make[0][1][0],g[1])
+                        make2 = list(make[0][1])
+                        make2.remove(make[0][1][0])
+                        make2 = g[1] + make2
+                        make.append((make[0][0],make2))
+                make.remove(make[0])
+            elif re.search(r'[A-Z]', make[0][1][0]) and Find[make[0][1][0]] != Find[make[0][0]]:
+                make.remove(make[0])
+            #print(make)
+            #print('FRIST:',FRIST)
+        # break
+    #到这里，所有非终结符的FIRST集已经计算完毕了
+    #现在开始计算字符串的FIRST集
+    for g in G:
+        right = ''.join(g[1])
+        #print(right)
+        if re.search(r'[a-z]', g[1][0]) or pattern.search(g[1][0]):
+            FRIST[right] = g[1][0]
+        elif g[1][0] == 'ε':
+            FRIST[right] = 'ε'
+        else:
+            FRIST[right] = FRIST[g[1][0]]
+
+    print('FRIST:',FRIST)
+
+def make_floow():
+    FLOOW[G[0][0]] = '#'
+    # 遍历每一个非终结符
+    for f in Find:
+        for g in G:
+            if f in g[1]:
+                right_str = g[1][g[1].index(f) + 1:]
+                right_str = ''.join(right_str)
+                #如果该非终结符右侧不为空
+                if right_str != '':
+                    #print(right_str)
+                    if right_str in FRIST:
+                        #那么就将字符串的FIRST的元素除空串加入FLOOW集合
+                        FLOOW[f] = FLOOW[f] + FRIST[right_str]
+                        if re.search('ε', FRIST[right_str]):
+                            FLOOW[f] = FLOOW[f] + FLOOW[g[0]]
+                    elif all(re.search(r'[a-z]', item) or pattern.search(item) for item in right_str):
+                        FLOOW[f] = FLOOW[f] + right_str
+                else:
+                    FLOOW[f] = FLOOW[f] + FLOOW[g[0]]
+    for f in FLOOW:
+        List = FLOOW[f]
+        FLOOW[f] = ''
+        for l in List:
+            if l not in FLOOW[f] and l != 'ε':
+                FLOOW[f] = FLOOW[f] + l
+    print('FLOOW', FLOOW)
+
+
+def make_select():
+    for g in G:
+        #如果一个产生式的右部可以推出空串
+        right = ''.join(g[1])
+        if 'ε' in FRIST[right]:
+            s = FLOOW[g[0]] + FRIST[right]
+            s = str(s).replace('ε', '')
+            SELECT.append((g[0], g[1], s))
+        else:
+            SELECT.append((g[0], g[1], FRIST[right]))
+    print('SELECT', SELECT)
+
+
+def check():
+    k = 0
+    for s in range(len(SELECT)):
+        for others in SELECT[:s] + SELECT[s + 1:]:
+            if SELECT[s][0] == others[0]:
+                if set(SELECT[s][2]).intersection(set(others[2])):
+                    # print(SELECT[s][0],set(SELECT[s][2]),set(others[2]))
+                    k = 1
+    if k == 1:
+        print('不是LL(1)文法')
+    else:
+        print('是LL(1)文法')
+
+def make_table():
+    #先做一个表格，行为非终结符，列为产生式里全部的终结符和空、#
+    for f in Find:
+        table[f] = {}
+        table[f]['#'] = 'err'
+        for g in G:
+            for char in g[1]:
+                if (re.search(r'[a-z]', char) or pattern.search(char)) and char not in table[f]:
+                    table[f][char] = 'err'
+    #表格设计完成，现在来填东西
+    for h in table:
+        for l in table[h]:
+            for g in G:
+                #这里遍历每个非终结符的所有产生式
+                if g[0] == h:
+                    right = ''.join(g[1])
+                    #如果有产生式能推导出当前的列
+                    #print(h,l,right)
+                    if l in FRIST[right]:
+                        table[h][l] = right
+                    elif 'ε' in right:
+                        if l in FLOOW[g[0]]:
+                            table[h][l] = 'ε'
+                    #print(h,l,right)
+
+def analysis():
+    count = 0
+    analysis_list = []
+    #input = ''
+    inputs = 'i+i*i#'
+    use = ''
+    analysis_list.append(G[0][0])
+    analysis_list.append('#')
+    #创建根节点
+    root = Node()
+    root.name = G[0][0]
+    #节点对象的列表
+    nodes = []
+    nodes.append(root)
+    while analysis_list[0] != '#':
+        #如果预测表里的非终结符能推导出当前的终结符
+        if table[analysis_list[0]][inputs[0]] != 'err':
+            char = analysis_list[0]
+            #那么，就将该非终结符换为产生式右侧
+            analysis_list.remove(analysis_list[0])
+            before = ''
+            alist = []
+            for c in table[char][inputs[0]]:
+                if c == '’':
+                    alist.append(before+c)
+                elif before != '':
+                    alist.append(before)
+                if table[char][inputs[0]][-1] == c and c != '’':
+                    alist.append(c)
+                #print(alist)
+                before = c
+            #此处，由分析栈选中的文法符号进行了产生式的替换
+            analysis_list = alist + analysis_list
+            use = table[char][inputs[0]]#推导过程的提示
+
+            #这里创建节点，并存入节点列表中
+            childs = []
+            parent = nodes[0]
+            for a in alist:
+
+                child = Node()
+                child.name = a
+                childs.append(child)
+                parent.children.append(child)
+                child.parent = parent
+                child.parent_name = parent.name
+            #然后将目前的列表最前位设置为已抵达过
+            if parent.parent != '':
+                parent.reach = 1
+            nodes = childs + nodes
+
+
+
+            #如果将非终结符替换完后出现了当前终结符
+            if analysis_list[0] == inputs[0]:
+                #print(inputs[1:])
+                analysis_list.remove(analysis_list[0])
+
+                #当前能推出输入串的终结符
+                #将终结符加入到树中，并设置为已抵达
+                nodes[0].reach = 1
+                #将该节点加入到节点列表中
+
+                #print('1',nodes[0].name,nodes[0].reach)
+                inputs = inputs[1:]
+                #如果节点列表的0号位为已抵达，且没有未抵达的子节点，那么就将其从节点列表中删去
+                while True:
+                    if nodes[0].reach == 1 and nodes[0].children == '':
+                        nodes.remove(nodes[0])
+                    elif nodes[0].reach == 1 and all(item.reach == 1 for item in nodes[0].children):
+                        nodes.remove(nodes[0])
+                    else:
+                        break
+            #如果替换完了变成了空，就删去
+            if analysis_list[0] == 'ε':
+                if inputs[0] in FLOOW[char]:
+                    analysis_list.remove(analysis_list[0])
+                    nodes[0].reach = 1
+                    while True:
+                        if nodes[0].reach == 1 and nodes[0].children == '':
+                            nodes.remove(nodes[0])
+                        elif nodes[0].reach == 1 and all(item.reach == 1 for item in nodes[0].children):
+                            nodes.remove(nodes[0])
+                        else:
+                            break
+        count = count + 1
+        print('步骤:',count,'分析栈',analysis_list,'剩余输入串',inputs,'推导过程',use)
+        if count == 100:
+            break
+        # for node in nodes:
+        #     print(node.name,node.reach)
+    print('遍历语法树,深度优先搜索')
+    root.traverse_dfs()
+find_empty()
+make_frist()
+make_floow()
+make_select()
+check()
+make_table()
+print('预测分析表')
+for vn in table:
+    print(vn,table[vn])
+analysis()
